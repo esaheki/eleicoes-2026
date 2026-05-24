@@ -12,6 +12,7 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { KinesisEventSource, SqsDlq, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { WebSocketLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -123,13 +124,18 @@ export class StreamingStack extends cdk.Stack {
       retentionPeriod: cdk.Duration.days(14),
     });
 
+    // ── SQS dead-letter queue for broadcaster DynamoDB Streams failures ───
+    const broadcasterDlq = new sqs.Queue(this, 'BroadcasterDlq', {
+      queueName: 'broadcaster-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
     // ── Shared collector env (table names + stream name) ──────────────────
     const collectorCommonEnv: Record<string, string> = {
       KINESIS_STREAM_NAME: this.stream.streamName,
       SEEN_IDS_TABLE: seenIdsTable.tableName,
       COLLECTOR_STATE_TABLE: collectorStateTable.tableName,
       KEYWORDS: 'eleições2026,presidente2026,Lula,Flávio,Zema,Caiado,PT,PL,NOVO,PSD',
-      REDDIT_USER_AGENT: 'BR-Election-Monitor/1.0',
     };
 
     const collectorEntry = path.join(__dirname, '../../packages/collector/src/index.ts');
@@ -144,11 +150,8 @@ export class StreamingStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         ...collectorCommonEnv,
-        COLLECTOR_MODE: 'reddit-news',
-        SUBREDDITS: 'brasil,brasilivre,PoliticaBR,BrasildoB',
-        REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID ?? '',
-        REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET ?? '',
-        NEWS_API_KEY_SSM: '/eleicoes2026/news-api-key',
+        COLLECTOR_MODE: 'news',
+        RSS_FEEDS: 'https://www.cartacapital.com.br/feed/,https://jovempan.com.br/feed/rss/,https://agenciabrasil.ebc.com.br/rss/politica/feed.xml,https://rss.uol.com.br/feed/noticias.xml,https://feeds.folha.uol.com.br/poder/rss091.xml',
       },
     });
 
@@ -164,9 +167,6 @@ export class StreamingStack extends cdk.Stack {
         ...collectorCommonEnv,
         COLLECTOR_MODE: 'apify',
         APIFY_API_TOKEN_SSM: '/eleicoes2026/apify-api-token',
-        THREADS_SEARCH_TERMS: 'Lula 2026,Flávio Bolsonaro,Zema eleições,Caiado presidente,eleições2026',
-        THREADS_MAX_RESULTS_PER_TERM: '100',
-        THREADS_APIFY_ACTOR: 'futurizerush~threads-keyword-search',
         X_SEARCH_TERMS: 'Lula 2026,Flávio Bolsonaro,eleições2026,Zema presidente,Caiado presidente',
         X_LANG_FILTER: 'pt',
         X_MAX_TWEETS_PER_TERM: '100',
@@ -188,7 +188,7 @@ export class StreamingStack extends cdk.Stack {
         YOUTUBE_API_KEY_SSM: '/eleicoes2026/youtube-api-key',
         YOUTUBE_SEARCH_TERMS: 'Lula 2026,Flávio Bolsonaro 2026,eleições presidenciais 2026',
         YOUTUBE_MAX_VIDEOS_PER_RUN: '10',
-        YOUTUBE_MAX_COMMENTS_PER_VIDEO: '200',
+        YOUTUBE_MAX_COMMENTS_PER_VIDEO: '50',
       },
     });
 
@@ -315,11 +315,15 @@ export class StreamingStack extends cdk.Stack {
       startingPosition: lambda.StartingPosition.LATEST,
       batchSize: 100,
       bisectBatchOnError: true,
+      onFailure: new SqsDlq(broadcasterDlq),
+      retryAttempts: 3,
     }));
     broadcasterLambda.addEventSource(new DynamoEventSource(commentSamplesTable, {
       startingPosition: lambda.StartingPosition.LATEST,
       batchSize: 100,
       bisectBatchOnError: true,
+      onFailure: new SqsDlq(broadcasterDlq),
+      retryAttempts: 3,
     }));
 
     // ── Comprehend IAM for Processor ──────────────────────────────────────
@@ -360,7 +364,6 @@ export class StreamingStack extends cdk.Stack {
         `arn:aws:ssm:${this.region}:${this.account}:parameter/eleicoes2026/*`,
       ],
     });
-    collectorLambda.addToRolePolicy(ssmPolicy);
     apifyCollectorLambda.addToRolePolicy(ssmPolicy);
     youtubeCollectorLambda.addToRolePolicy(ssmPolicy);
 
@@ -416,6 +419,54 @@ export class StreamingStack extends cdk.Stack {
       proxy: true,
       restApiName: 'eleicoes2026-api',
       deployOptions: { stageName: 'prod' },
+    });
+
+    // ── Regional WAF for REST API Gateway ────────────────────────────────
+    // Provides managed-rule protection (SQLi, XSS, bad inputs) and rate-limits
+    // direct execute-api.amazonaws.com access that bypasses CloudFront.
+    // Rate limit uses IP aggregation — safe here because CloudFront PoPs spread
+    // load across many IPs; only a single-IP direct attack would trigger the limit.
+    const regionalWaf = new wafv2.CfnWebACL(this, 'RegionalWaf', {
+      name: 'eleicoes2026-api-waf',
+      scope: 'REGIONAL',
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: 'eleicoes2026-api-waf',
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet' },
+          },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'CommonRuleSet', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesKnownBadInputsRuleSet' },
+          },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'KnownBadInputs', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'APIDirectRateLimit',
+          priority: 3,
+          action: { block: {} },
+          statement: { rateBasedStatement: { limit: 3000, aggregateKeyType: 'IP' } },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'APIDirectRateLimit', sampledRequestsEnabled: true },
+        },
+      ],
+    });
+
+    new wafv2.CfnWebACLAssociation(this, 'RestApiWafAssociation', {
+      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${this.restApi.restApiId}/stages/prod`,
+      webAclArn: regionalWaf.attrArn,
     });
 
     // ── CloudWatch Alarms ─────────────────────────────────────────────────
@@ -538,8 +589,21 @@ export class StreamingStack extends cdk.Stack {
     });
     processorDlqDepthAlarm.addAlarmAction(alarmAction);
 
+    // 7. DLQ depth: any unprocessed messages in broadcaster-dlq
+    const broadcasterDlqDepthAlarm = new cloudwatch.Alarm(this, 'BroadcasterDlqDepthAlarm', {
+      metric: broadcasterDlq.metricApproximateNumberOfMessagesVisible({
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 0,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Broadcaster DLQ has unprocessed messages — WebSocket pushes may be silently failing',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    broadcasterDlqDepthAlarm.addAlarmAction(alarmAction);
+
     // ── CloudWatch Dashboard ──────────────────────────────────────────────
-    const sources = ['reddit', 'news', 'threads', 'twitter', 'youtube'];
+    const sources = ['news', 'twitter', 'youtube'];
 
     const dashboard = new cloudwatch.Dashboard(this, 'OperationsDashboard', {
       dashboardName: 'eleicoes2026-operations',
@@ -565,6 +629,7 @@ export class StreamingStack extends cdk.Stack {
           fakeInfoSpikeAlarm,
           scoreStalenessAlarm,
           processorDlqDepthAlarm,
+          broadcasterDlqDepthAlarm,
         ],
         width: 24,
         height: 3,
@@ -610,7 +675,7 @@ export class StreamingStack extends cdk.Stack {
       new cloudwatch.GraphWidget({
         title: 'Collector Lambda Errors',
         left: [
-          collectorLambda.metricErrors({ period: cdk.Duration.minutes(5), label: 'reddit-news' }),
+          collectorLambda.metricErrors({ period: cdk.Duration.minutes(5), label: 'news' }),
           apifyCollectorLambda.metricErrors({ period: cdk.Duration.minutes(5), label: 'apify' }),
           youtubeCollectorLambda.metricErrors({ period: cdk.Duration.minutes(5), label: 'youtube' }),
         ],
@@ -675,9 +740,10 @@ export class StreamingStack extends cdk.Stack {
         height: 6,
       }),
       new cloudwatch.GraphWidget({
-        title: 'Processor DLQ Depth',
+        title: 'DLQ Depth',
         left: [
-          processorDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1), label: 'Queued' }),
+          processorDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1), label: 'Processor' }),
+          broadcasterDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1), label: 'Broadcaster' }),
         ],
         width: 8,
         height: 6,
@@ -723,6 +789,11 @@ export class StreamingStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ProcessorDlqUrl', {
       value: processorDlq.queueUrl,
       exportName: 'ProcessorDlqUrl',
+    });
+
+    new cdk.CfnOutput(this, 'BroadcasterDlqUrl', {
+      value: broadcasterDlq.queueUrl,
+      exportName: 'BroadcasterDlqUrl',
     });
 
     new cdk.CfnOutput(this, 'WsApiUrl', {

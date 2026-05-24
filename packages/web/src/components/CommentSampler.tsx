@@ -5,9 +5,9 @@ import { SourceIcon } from './SourceIcon';
 import { CANDIDATES, CANDIDATE_COLORS } from '../types';
 import type { SampleData, Candidate } from '../types';
 
-const SOURCES = ['Todos', 'YouTube', 'Threads', 'X/Twitter', 'Reddit', 'Notícias'] as const;
+const SOURCES = ['Todos', 'YouTube', 'X/Twitter', 'Notícias'] as const;
 const SOURCE_MAP: Record<string, string> = {
-  YouTube: 'youtube', Threads: 'threads', 'X/Twitter': 'twitter', Reddit: 'reddit', Notícias: 'news',
+  YouTube: 'youtube', 'X/Twitter': 'twitter', Notícias: 'news',
 };
 const SENTIMENTS = ['Todos', 'Positivo', 'Negativo', 'Neutro'] as const;
 const SENTIMENT_MAP: Record<string, string> = {
@@ -177,7 +177,7 @@ export function CommentSampler({ hashtagFilter }: Props) {
   }, [flush]);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />

@@ -11,12 +11,12 @@ A public web dashboard that streams social media and news data about the 2026 Br
 
 ```
 Social APIs ──► Collector Lambda ──► Kinesis ──► Processor Lambda ──► DynamoDB
-                (Reddit, NewsAPI,                (Comprehend +
-                 Threads, X, YouTube)             Bedrock Haiku)
-                                                        │
-                                               API Lambda + WS Broadcaster
-                                                        │
-                                               React Frontend (CloudFront/S3)
+                (RSS feeds,                       (Comprehend pt +
+                 X via Apify,                      Bedrock Haiku fakechecker)
+                 YouTube Data API v3)                     │
+                                             API Lambda + WS Broadcaster
+                                                          │
+                                           WAF ──► React Frontend (CloudFront/S3)
 ```
 
 | Service | Purpose |
@@ -26,6 +26,7 @@ Social APIs ──► Collector Lambda ──► Kinesis ──► Processor Lam
 | Amazon DynamoDB (On-Demand) | Sentiment windows, comment samples, misinfo events |
 | AWS Comprehend | Portuguese language detection + sentiment |
 | Amazon Bedrock (Claude Haiku) | Misinformation scoring |
+| AWS WAFv2 | Rate limiting + managed rules on CloudFront and API Gateway |
 | API Gateway (REST + WebSocket) | REST endpoints + live push |
 | CloudFront + S3 | Static frontend hosting |
 | Route 53 | `eleicoes-2026.com` / `api.eleicoes-2026.com` |
@@ -39,30 +40,29 @@ eleicoes-2026/
 ├── infra/                    # AWS CDK stacks (TypeScript)
 │   ├── bin/app.ts
 │   └── lib/
-│       ├── streaming-stack.ts   # Kinesis, Lambda, DynamoDB
-│       ├── website-stack.ts     # S3, CloudFront, API Gateway, Route 53
+│       ├── streaming-stack.ts   # Kinesis, Lambda, DynamoDB, WAF (Regional)
+│       ├── website-stack.ts     # S3, CloudFront, WAF (CloudFront), Route 53
 │       └── pipeline-stack.ts    # Firehose, S3 archive, Glue
 ├── packages/
-│   ├── collector/            # Collector Lambda — polls APIs → Kinesis
+│   ├── collector/            # Collector Lambda — polls sources → Kinesis
 │   │   └── src/
 │   │       ├── index.ts      # Handler, routes by COLLECTOR_MODE
 │   │       ├── dedup.ts      # DynamoDB-backed deduplication (10-min TTL)
 │   │       ├── kinesis.ts    # Batched PutRecords helper
 │   │       ├── metrics.ts    # CloudWatch PutMetricData helper
 │   │       └── sources/
-│   │           ├── reddit.ts
-│   │           ├── newsapi.ts
+│   │           ├── rss.ts       # RSS feed collector (encoding-aware)
 │   │           ├── apify.ts     # Shared Apify REST client
-│   │           ├── threads.ts
 │   │           ├── xtwitter.ts
 │   │           └── youtube.ts   # 4-phase: search → enrich → comments → map
 │   ├── processor/            # Processor Lambda — Kinesis → Comprehend → DynamoDB
 │   ├── api/                  # API Lambda — 5 REST endpoints
 │   └── web/                  # React dashboard (Vite + Tailwind + Recharts)
+├── docs/
+│   └── wa-review-2026-05-24.md  # AWS Well-Architected review findings
 ├── package.json              # npm workspaces root
 ├── tsconfig.base.json        # Shared TypeScript config
-├── SPEC.md                   # Full technical specification
-└── PLAN.md                   # Incremental build plan with progress tracking
+└── SPEC.md                   # Full technical specification
 ```
 
 ---
@@ -75,9 +75,9 @@ eleicoes-2026/
 # Install dependencies
 npm install
 
-# Local collector dry-run (Reddit + NewsAPI)
+# Local collector dry-run (RSS feeds)
 cd packages/collector
-npm run dev          # prints collected posts to stdout, no Kinesis write
+DRY_RUN=true npm run dev    # prints collected posts to stdout, no Kinesis write
 
 # Synthesize CDK (no deploy)
 cd infra
@@ -89,22 +89,32 @@ npx cdk synth StreamingStack
 Copy `.env.local` to the repo root and fill in your API keys:
 
 ```env
-NEWS_API_KEY=<newsapi.org key>
 APIFY_API_TOKEN=<apify.com token>
 YOUTUBE_API_KEY=<google cloud key with YouTube Data API v3>
 ```
+
+RSS feed URLs are configured in `packages/collector/src/dev.ts` (or via `RSS_FEEDS` env var, comma-separated).
 
 ---
 
 ## Deployment
 
 ```bash
-# Deploy backend infrastructure
+# Deploy backend + pipeline stacks
 cd infra
-npx cdk deploy StreamingStack
+npx cdk deploy StreamingStack PipelineStack
 
-# (Later phases) Deploy full stack
-npx cdk deploy --all
+# Build and deploy frontend
+cd ../packages/web
+VITE_API_BASE=https://api.eleicoes-2026.com/v1 \
+VITE_WS_URL=wss://api.eleicoes-2026.com \
+npm run build
+aws s3 sync dist/ s3://eleicoes-2026-site --delete
+aws cloudfront create-invalidation --distribution-id EF046M9V59Q9C --paths "/*"
+
+# Deploy website stack
+cd ../../infra
+npx cdk deploy WebsiteStack
 ```
 
 ---
@@ -113,9 +123,7 @@ npx cdk deploy --all
 
 | Source | Method | Cost |
 |---|---|---|
-| Reddit | Public JSON API (no key) | Free |
-| NewsAPI | REST API | Free tier (1,000 req/day) |
-| Threads | Apify actor `futurizerush/threads-keyword-search` | ~$13/month |
+| News / portais | RSS feeds (Carta Capital, Jovem Pan, Agência Brasil, UOL, Folha) | Free |
 | X/Twitter | Apify actor `xquik/x-tweet-scraper` | ~$6.50/month |
 | YouTube | YouTube Data API v3 | Free (10k units/day) |
 
@@ -127,26 +135,26 @@ npx cdk deploy --all
 |---|---|
 | `GET /v1/scores` | Rolling 1-hour sentiment score per candidate |
 | `GET /v1/history?candidate=&hours=` | Hourly sentiment history |
-| `GET /v1/samples` | Recent comment samples with filters |
+| `GET /v1/samples` | Recent comment samples with filters (source, candidate, sentiment, credibility) |
 | `GET /v1/trending?candidate=` | Top hashtags by count |
 | `GET /v1/misinformation?hours=` | Misinfo aggregate stats |
 | `WSS /ws` | Live `score_update` and `new_sample_batch` events |
 
 ---
 
-## Build Progress
+## Build Status
 
-See [PLAN.md](PLAN.md) for the full 10-phase build plan.
+All phases complete and deployed.
 
 | Phase | Status | Description |
 |---|---|---|
 | 1 — Workspace & Types | ✅ | npm workspaces, shared `SocialPost` types |
 | 2 — CDK Infrastructure | ✅ | All DynamoDB tables, Kinesis, Lambda placeholders |
-| 3 — Collector Lambda | ✅ | All 5 sources, dedup, Kinesis write, esbuild bundle |
+| 3 — Collector Lambda | ✅ | RSS/X/YouTube sources, dedup, Kinesis write |
 | 4 — Processor Lambda | ✅ | Comprehend sentiment → DynamoDB |
 | 5 — Fake Info Scorer | ✅ | Bedrock Claude Haiku misinfo scoring |
 | 6 — API Lambda | ✅ | 5 REST endpoints |
-| 7 — WebSocket Broadcaster | ✅ | DynamoDB Streams → live push |
+| 7 — WebSocket Broadcaster | ✅ | DynamoDB Streams → live push, SQS DLQ |
 | 8 — React Frontend | ✅ | Vite + Tailwind + Recharts dashboard |
-| 9 — Website Infrastructure | ✅ | CloudFront, S3, ACM, Route 53 |
+| 9 — Website Infrastructure | ✅ | CloudFront, S3, ACM, Route 53, WAFv2 |
 | 10 — Pipeline + Monitoring | ✅ | Firehose archive, CloudWatch alarms |

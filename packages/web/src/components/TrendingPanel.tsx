@@ -44,16 +44,21 @@ export function TrendingPanel({ onHashtagClick }: Props) {
         <p className="text-xs text-gray-600">Sem dados no momento.</p>
       )}
 
-      <ol className="space-y-1.5">
+      <ol className="space-y-0.5">
         {items.map((item, i) => (
           <li key={item.hashtag}>
             <button
               onClick={() => onHashtagClick?.(item.hashtag)}
-              className="w-full text-left text-xs text-gray-300 hover:text-white transition-colors group"
+              className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-800 transition-colors group"
             >
-              <span className="text-gray-600 mr-1">#{i + 1}</span>
-              <span className="group-hover:underline">{item.hashtag}</span>
-              <span className="text-gray-500 ml-1">— {formatCount(item.count)}</span>
+              <span className="text-xs font-bold tabular-nums w-4 text-right flex-shrink-0"
+                style={{ color: i === 0 ? '#f59e0b' : i === 1 ? '#9ca3af' : i === 2 ? '#b45309' : '#4b5563' }}>
+                {i + 1}
+              </span>
+              <span className="text-xs text-gray-300 group-hover:text-white transition-colors truncate flex-1">
+                {item.hashtag}
+              </span>
+              <span className="text-xs text-gray-500 flex-shrink-0">{formatCount(item.count)}</span>
             </button>
           </li>
         ))}

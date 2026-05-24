@@ -17,7 +17,7 @@ DRY_RUN=true npm run dev   # local dry-run via tsx — prints posts, skips Kines
 npm run build              # tsc compile to dist/
 npm run typecheck
 ```
-Requires `.env.local` in the repo root with `NEWS_API_KEY`, `APIFY_API_TOKEN`, `YOUTUBE_API_KEY`.
+Requires `.env.local` in the repo root with `APIFY_API_TOKEN`, `YOUTUBE_API_KEY`. RSS feeds are configured in `dev.ts` (override via `RSS_FEEDS` env var).
 
 ### Processor / API / Broadcaster Lambdas
 ```bash
@@ -47,7 +47,7 @@ npx cdk deploy StreamingStack PipelineStack
 cd packages/web
 VITE_API_BASE=https://api.eleicoes-2026.com/v1 VITE_WS_URL=wss://api.eleicoes-2026.com npm run build
 aws s3 sync dist/ s3://eleicoes-2026-site --delete
-aws cloudfront create-invalidation --distribution-id $SPA_CF_ID --paths "/*"
+aws cloudfront create-invalidation --distribution-id EF046M9V59Q9C --paths "/*"
 cd ../../infra && npx cdk deploy WebsiteStack
 ```
 
@@ -55,14 +55,14 @@ cd ../../infra && npx cdk deploy WebsiteStack
 
 ```
 Social APIs ──► Collector Lambda ──► Kinesis (On-Demand) ──► Processor Lambda ──► DynamoDB
-(Reddit, NewsAPI,                                             (Comprehend pt +
- Threads, X via Apify,                                        Bedrock Haiku fakechecker)
+(RSS feeds,                                                   (Comprehend pt +
+ X via Apify,                                                 Bedrock Haiku fakechecker)
  YouTube Data API v3)                                                 │
                                                          Broadcaster Lambda (DDB Streams)
                                                                       │
                                                          API Lambda (REST) + API GW WebSocket
                                                                       │
-                                                         React Frontend (CloudFront/S3)
+                                              WAF (CloudFront + Regional) ──► React Frontend (CloudFront/S3)
 ```
 
 All Lambda runtimes are **Node.js 20.x** (dev machine uses Node 24 via nvm). Lambda code is bundled by CDK's `NodejsFunction` construct using **esbuild** — no `tsc` compile step needed for deployment.
@@ -71,10 +71,10 @@ All Lambda runtimes are **Node.js 20.x** (dev machine uses Node 24 via nvm). Lam
 
 | Package | Purpose |
 |---|---|
-| `packages/collector` | Lambda polling Reddit/NewsAPI/Threads/X/YouTube → Kinesis. `COLLECTOR_MODE` env var routes to the right source. Shared dedup via `seen-ids` DynamoDB table (10-min TTL). |
+| `packages/collector` | Lambda polling RSS feeds/X/YouTube → Kinesis. `COLLECTOR_MODE` env var routes to the right source (`news`, `apify`, `youtube`). Shared dedup via `seen-ids` DynamoDB table (10-min TTL). |
 | `packages/processor` | Kinesis-triggered Lambda. Language filter (`DetectDominantLanguage`, PT≥0.7), sentiment (`DetectSentiment`), Bedrock fakechecker (concurrency-5 via `p-limit`), then writes to 4 DynamoDB tables. |
 | `packages/api` | API Gateway REST Lambda. 5 endpoints: `/v1/scores`, `/v1/history`, `/v1/samples`, `/v1/trending`, `/v1/misinformation`. LGPD anonymization via SHA-256 on `author` field. |
-| `packages/broadcaster` | DynamoDB Streams-triggered Lambda. Pushes `score_update` and batched `new_sample_batch` events to all WebSocket connections. |
+| `packages/broadcaster` | DynamoDB Streams-triggered Lambda. Pushes `score_update` and batched `new_sample_batch` events to all WebSocket connections. SQS DLQ on both Streams sources. |
 | `packages/web` | React 18 + Vite + Tailwind + Recharts dashboard. Portuguese-only, mobile-first. |
 | `infra` | AWS CDK TypeScript app with 3 stacks: `StreamingStack` (core backend), `PipelineStack` (Firehose → S3 → Glue), `WebsiteStack` (CloudFront, ACM, Route 53). |
 
@@ -95,7 +95,7 @@ All Lambda runtimes are **Node.js 20.x** (dev machine uses Node 24 via nvm). Lam
 
 **No `"live"` window in `election-sentiment`:** The live score shown in the dashboard is computed at API response time by summing the last 12 hourly items (rolling 1h). Never write a pre-aggregated live counter.
 
-**Fakechecker runs inside Processor Lambda** (not a separate Lambda) to avoid cold-start overhead per comment. Skip scoring for `source === 'news'` (NewsAPI articles are from verified outlets).
+**Fakechecker runs inside Processor Lambda** (not a separate Lambda) to avoid cold-start overhead per comment. Skip scoring for `source === 'news'` — RSS news articles are from verified outlets, no LLM fact-checking needed.
 
 **WebSocket primary, HTTP polling fallback:** `useScores` disables its 30s poll interval while WS is connected. `useWebSocket` is a module-level singleton with subscription fan-out so multiple hooks share one WS connection.
 
@@ -108,6 +108,12 @@ All Lambda runtimes are **Node.js 20.x** (dev machine uses Node 24 via nvm). Lam
 **Kinesis On-Demand mode:** Auto-scales for election-day traffic spikes. Do not switch to provisioned shards.
 
 **YouTube quota:** 10k units/day free quota (or 100k after a Google Cloud increase request). CloudWatch alarm at 9k units/day triggers quota-disable via `collector-state` table. The `YouTubeQuotaUsed` CloudWatch metric is emitted per run.
+
+**RSS encoding:** The RSS collector uses a custom `fetchFeed()` that reads raw bytes, sniffs the encoding from the XML prolog (e.g. `<?xml encoding="ISO-8859-1"?>`), and decodes with `TextDecoder` before passing to `rss-parser`. Required for feeds like Folha that serve ISO-8859-1 without a `Content-Type` charset header.
+
+**WAF:** Two WebACLs — CLOUDFRONT-scoped (in `WebsiteStack`, us-east-1) protecting both CloudFront distributions, and REGIONAL-scoped (in `StreamingStack`) attached directly to the API Gateway stage. Rate limit on CloudFront WAF is lower (2000/5min per IP) since it sees real client IPs; Regional WAF threshold is higher (3000/5min) because CloudFront PoP IPs aggregate multiple users.
+
+**Broadcaster DLQ:** Both DynamoDB Streams event sources on the broadcaster Lambda have `onFailure: new SqsDlq(broadcasterDlq), retryAttempts: 3` to prevent a poison record from blocking a shard indefinitely.
 
 ## Candidate data
 
@@ -123,13 +129,14 @@ These colors are used in Tailwind's `tailwind.config.js` as `lula`, `flavio`, `z
 
 ### `.env.local` (repo root, for local dev)
 ```
-NEWS_API_KEY=
 APIFY_API_TOKEN=
 YOUTUBE_API_KEY=
 ```
 
 ### Lambda env vars set in `streaming-stack.ts` (CDK)
-- Collector: `KINESIS_STREAM_NAME`, `REDDIT_USER_AGENT`, `NEWS_API_KEY`, `APIFY_API_TOKEN`, `THREADS_*`, `X_*`, `YOUTUBE_*`, `KEYWORDS`, `SUBREDDITS`
+- Collector (`news` mode): `KINESIS_STREAM_NAME`, `RSS_FEEDS`, `KEYWORDS`
+- Collector (`apify` mode): `KINESIS_STREAM_NAME`, `APIFY_API_TOKEN`, `X_*`, `KEYWORDS`
+- Collector (`youtube` mode): `KINESIS_STREAM_NAME`, `YOUTUBE_API_KEY`, `YOUTUBE_*`, `KEYWORDS`
 - Processor: `DYNAMO_TABLE`, `COMPREHEND_LANGUAGE`, `BEDROCK_MODEL_ID`, `FAKE_INFO_CONFIDENCE_THRESHOLD`, `FAKE_INFO_SCORE_HIGH`, `FAKE_INFO_SCORE_MEDIUM`
 - API: `DYNAMO_TABLE`, `CORS_ORIGIN`
 
@@ -143,3 +150,4 @@ YOUTUBE_API_KEY=
 - The Route 53 hosted zone for `eleicoes-2026.com` already exists — CDK uses `HostedZone.fromLookup()`. Do not create a new hosted zone.
 - `crossRegionReferences: true` is set in the CDK app to allow `WebsiteStack` to reference the API URLs from `StreamingStack`.
 - Lambda code is bundled at deploy time by `NodejsFunction` (esbuild) — the `dist/` folders of Lambda packages are not used in production.
+- CloudFront SPA distribution ID: `EF046M9V59Q9C` (bucket: `eleicoes-2026-site`). API distribution ID: `E6RNE59KDD7XF`.

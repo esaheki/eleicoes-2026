@@ -2,20 +2,18 @@ import { SocialPost } from './types';
 import { putToKinesis } from './kinesis';
 import { emitMetric, emitSourceMetrics } from './metrics';
 import { loadSecrets } from './secrets';
-import { collectReddit } from './sources/reddit';
-import { collectNewsAPI } from './sources/newsapi';
-import { collectThreads } from './sources/threads';
+import { collectRSS } from './sources/rss';
 import { collectXTwitter } from './sources/xtwitter';
 import { collectYouTube } from './sources/youtube';
 
 export const handler = async (): Promise<void> => {
   await loadSecrets();
   const DRY_RUN = process.env.DRY_RUN === 'true';
-  const MODE = process.env.COLLECTOR_MODE ?? 'reddit-news';
+  const MODE = process.env.COLLECTOR_MODE ?? 'news';
   const posts: SocialPost[] = [];
 
-  if (MODE === 'reddit-news') {
-    const results = await Promise.allSettled([collectReddit(), collectNewsAPI()]);
+  if (MODE === 'news') {
+    const results = await Promise.allSettled([collectRSS()]);
     for (const r of results) {
       if (r.status === 'fulfilled') posts.push(...r.value);
       else console.error('Source failed:', r.reason);

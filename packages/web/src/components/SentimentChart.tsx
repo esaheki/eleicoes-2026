@@ -50,28 +50,29 @@ export function SentimentChart() {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
       <h3 className="text-sm font-semibold text-gray-700 mb-4">Histórico de sentimento — 24h</h3>
-      <ResponsiveContainer width="100%" height={260}>
-        <LineChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+          <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} unit="%" axisLine={false} tickLine={false} />
           <Tooltip
+            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}
             formatter={(v: number, name: string) => [`${v}%`, name]}
-            labelFormatter={l => `Hora: ${l as string}`}
+            labelFormatter={l => `${l as string}`}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={{ fontSize: 12, paddingTop: '8px' }} />
           {CANDIDATES.map(c => (
             <Line
               key={c}
               type="monotone"
               dataKey={c}
               stroke={CANDIDATE_COLORS[c]}
-              strokeWidth={2}
+              strokeWidth={2.5}
               dot={false}
               connectNulls
-              activeDot={{ r: 4 }}
+              activeDot={{ r: 5, strokeWidth: 0 }}
             />
           ))}
         </LineChart>

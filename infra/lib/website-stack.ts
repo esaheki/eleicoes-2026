@@ -7,6 +7,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 const DOMAIN = 'eleicoes-2026.com';
@@ -28,6 +29,48 @@ export class WebsiteStack extends cdk.Stack {
       domainName: DOMAIN,
       subjectAlternativeNames: [`*.${DOMAIN}`],
       validation: acm.CertificateValidation.fromDns(zone),
+    });
+
+    // ── WAF WebACL for CloudFront (CLOUDFRONT scope — must be us-east-1) ──
+    // Covers both the SPA distribution and the API+WebSocket distribution.
+    // Rate limit uses real client IPs (CloudFront resolves X-Forwarded-For
+    // before the WAF rule runs at the edge).
+    const cloudfrontWaf = new wafv2.CfnWebACL(this, 'CloudFrontWaf', {
+      name: 'eleicoes2026-cf-waf',
+      scope: 'CLOUDFRONT',
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: 'eleicoes2026-cf-waf',
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet' },
+          },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'CommonRuleSet', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesKnownBadInputsRuleSet' },
+          },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'KnownBadInputs', sampledRequestsEnabled: true },
+        },
+        {
+          name: 'CFRateLimit',
+          priority: 3,
+          action: { block: {} },
+          statement: { rateBasedStatement: { limit: 2000, aggregateKeyType: 'IP' } },
+          visibilityConfig: { cloudWatchMetricsEnabled: true, metricName: 'CFRateLimit', sampledRequestsEnabled: true },
+        },
+      ],
     });
 
     // ── S3 site bucket ────────────────────────────────────────────────────
@@ -55,6 +98,7 @@ export class WebsiteStack extends cdk.Stack {
       ],
       priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      webAclId: cloudfrontWaf.attrArn,
     });
 
     // ── CloudFront Distribution 2 — API (api.eleicoes-2026.com) ───────────
@@ -131,6 +175,7 @@ export class WebsiteStack extends cdk.Stack {
       certificate: cert,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      webAclId: cloudfrontWaf.attrArn,
     });
 
     // ── Route 53 records ──────────────────────────────────────────────────

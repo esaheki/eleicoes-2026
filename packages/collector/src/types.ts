@@ -21,7 +21,7 @@ export const CANDIDATE_PARTIES: Record<Candidate, string> = {
   'Ronaldo Caiado': 'PSD',
 };
 
-export type PostSource = 'reddit' | 'threads' | 'twitter' | 'news' | 'youtube';
+export type PostSource = 'twitter' | 'news' | 'youtube';
 
 export interface SocialPost {
   id: string;

@@ -44,7 +44,7 @@ export function MisinfoStats() {
   }, []);
 
   const pct = data?.likely_false_pct ?? 0;
-  const topFlags = (data?.top_flags ?? []).slice(0, 5).map(f => ({
+  const topFlags = (data?.top_flags ?? []).map(f => ({
     name: FLAG_LABELS[f.flag] ?? f.flag,
     count: f.count,
   }));
@@ -53,7 +53,7 @@ export function MisinfoStats() {
     : '—';
 
   return (
-    <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
       <button
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -105,10 +105,10 @@ export function MisinfoStats() {
 
               {topFlags.length > 0 && (
                 <div className="mt-4">
-                  <ResponsiveContainer width="100%" height={130}>
+                  <ResponsiveContainer width="100%" height={Math.max(140, topFlags.length * 30)}>
                     <BarChart data={topFlags} layout="vertical" margin={{ left: 0, right: 24, top: 4, bottom: 0 }}>
                       <XAxis type="number" tick={{ fontSize: 10 }} />
-                      <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }} />
+                      <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10 }} interval={0} />
                       <Tooltip formatter={(v: number) => [v.toLocaleString('pt-BR'), 'ocorrências']} />
                       <Bar dataKey="count" radius={[0, 3, 3, 0]}>
                         {topFlags.map((_, i) => (

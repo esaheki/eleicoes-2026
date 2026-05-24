@@ -1,4 +1,4 @@
-import { FaYoutube, FaXTwitter, FaRedditAlien, FaThreads, FaNewspaper } from 'react-icons/fa6';
+import { FaYoutube, FaXTwitter, FaNewspaper } from 'react-icons/fa6';
 
 interface SourceIconProps {
   source: string;
@@ -6,11 +6,9 @@ interface SourceIconProps {
 }
 
 const CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  youtube:  { icon: FaYoutube,     color: '#FF0000', label: 'YouTube' },
-  twitter:  { icon: FaXTwitter,    color: '#000000', label: 'X' },
-  reddit:   { icon: FaRedditAlien, color: '#FF4500', label: 'Reddit' },
-  threads:  { icon: FaThreads,     color: '#000000', label: 'Threads' },
-  news:     { icon: FaNewspaper,   color: '#6B7280', label: 'Notícias' },
+  youtube:  { icon: FaYoutube,   color: '#FF0000', label: 'YouTube' },
+  twitter:  { icon: FaXTwitter,  color: '#000000', label: 'X' },
+  news:     { icon: FaNewspaper, color: '#6B7280', label: 'Notícias' },
 };
 
 export function SourceIcon({ source, className = '' }: SourceIconProps) {

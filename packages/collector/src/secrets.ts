@@ -4,7 +4,6 @@ const ssm = new SSMClient({});
 let loaded = false;
 
 const SECRET_ENV_VARS: { envKey: string; ssmEnv: string }[] = [
-  { envKey: 'NEWS_API_KEY',      ssmEnv: 'NEWS_API_KEY_SSM' },
   { envKey: 'APIFY_API_TOKEN',   ssmEnv: 'APIFY_API_TOKEN_SSM' },
   { envKey: 'YOUTUBE_API_KEY',   ssmEnv: 'YOUTUBE_API_KEY_SSM' },
 ];

@@ -18,15 +18,7 @@ export function Metodologia() {
         <p className="text-sm text-gray-600 mb-2">Dados são coletados continuamente das seguintes plataformas:</p>
         <ul className="text-sm text-gray-600 space-y-1.5 list-none">
           <li>
-            <span className="font-medium">Reddit</span> — subreddits brasil, brasilivre, PoliticaBR,
-            BrasildoB (a cada 1 min)
-          </li>
-          <li>
-            <span className="font-medium">NewsAPI</span> — portais de notícias em português (a cada 1 min)
-          </li>
-          <li>
-            <span className="font-medium">Threads</span> — via Apify, termos de busca em português
-            (a cada 5 min)
+            <span className="font-medium">Portais de notícias</span> — feeds RSS de veículos brasileiros de jornalismo político (a cada 1 min)
           </li>
           <li>
             <span className="font-medium">X/Twitter</span> — via Apify, filtro <code className="bg-gray-100 px-1 rounded">lang:pt</code> (a cada 5 min)

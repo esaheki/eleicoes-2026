@@ -172,7 +172,7 @@ export async function collectYouTube(): Promise<SocialPost[]> {
 
   const searchTerms = process.env.YOUTUBE_SEARCH_TERMS!.split(',');
   const maxVideos = Number(process.env.YOUTUBE_MAX_VIDEOS_PER_RUN ?? '10');
-  const maxComments = Number(process.env.YOUTUBE_MAX_COMMENTS_PER_VIDEO ?? '200');
+  const maxComments = Number(process.env.YOUTUBE_MAX_COMMENTS_PER_VIDEO ?? '50');
   const keywords = process.env.KEYWORDS!.split(',').map(k => k.toLowerCase());
 
   let totalUnitsUsed = 0;

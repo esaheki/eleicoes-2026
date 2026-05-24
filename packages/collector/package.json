@@ -12,7 +12,8 @@
     "@aws-sdk/client-cloudwatch": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-kinesis": "^3.0.0",
-    "@aws-sdk/client-ssm": "^3.0.0"
+    "@aws-sdk/client-ssm": "^3.0.0",
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "dotenv": "^16.0.0",

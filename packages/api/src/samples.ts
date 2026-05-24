@@ -4,7 +4,7 @@ import { anonymizeAuthor } from './anonymize';
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const ALL_SOURCES = ['reddit', 'threads', 'twitter', 'news', 'youtube'] as const;
+const ALL_SOURCES = ['twitter', 'news', 'youtube'] as const;
 
 interface SampleParams {
   source?: string;

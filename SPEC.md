@@ -64,11 +64,9 @@ eleicoes2026/
 │   │   ├── src/
 │   │   │   ├── index.ts
 │   │   │   ├── sources/
-│   │   │   │   ├── reddit.ts
-│   │   │   │   ├── newsapi.ts
-│   │   │   │   ├── xtwitter.ts
-│   │   │   │   ├── threads.ts
+│   │   │   │   ├── rss.ts            # encoding-aware RSS collector
 │   │   │   │   ├── apify.ts          # shared Apify REST client
+│   │   │   │   ├── xtwitter.ts
 │   │   │   │   └── youtube.ts
 │   │   │   └── types.ts
 │   │   └── package.json
@@ -115,21 +113,17 @@ eleicoes2026/
 
 ```env
 KINESIS_STREAM_NAME=election-stream
-REDDIT_USER_AGENT=BR-Election-Monitor/1.0
-NEWS_API_KEY=<newsapi.org key>
-# ── Apify (Threads + X/Twitter scrapers) ──
+# ── RSS news collector ──
+RSS_FEEDS=https://www.cartacapital.com.br/feed/,https://jovempan.com.br/feed/rss/,https://agenciabrasil.ebc.com.br/rss/politica/feed.xml,https://rss.uol.com.br/feed/noticias.xml,https://feeds.folha.uol.com.br/poder/rss091.xml
+KEYWORDS=eleições2026,presidente2026,Lula,Flávio,Zema,Caiado,PT,PL,NOVO,PSD
+# ── Apify (X/Twitter scraper) ──
 APIFY_API_TOKEN=<apify.com API token>
-# Threads — actor: futurizerush/threads-keyword-search
-THREADS_SEARCH_TERMS=Lula 2026,Flávio Bolsonaro,Zema eleições,Caiado presidente,eleições2026
-THREADS_MAX_RESULTS_PER_TERM=100
-THREADS_APIFY_ACTOR=futurizerush~threads-keyword-search
 # X/Twitter — actor: xquik/x-tweet-scraper  ($0.15 per 1,000 tweets)
 X_SEARCH_TERMS=Lula 2026,Flávio Bolsonaro,eleições2026,Zema presidente,Caiado presidente
 X_LANG_FILTER=pt
 X_MAX_TWEETS_PER_TERM=100
 X_APIFY_ACTOR=xquik~x-tweet-scraper
-KEYWORDS=eleições2026,presidente2026,Lula,Flávio,Zema,Caiado,PT,PL,NOVO,PSD
-SUBREDDITS=brasil,brasilivre,PoliticaBR,BrasildoB
+# ── YouTube ──
 YOUTUBE_API_KEY=<google cloud api key with youtube data api v3>
 YOUTUBE_SEARCH_TERMS=Lula 2026,Flávio Bolsonaro 2026,eleições presidenciais 2026
 YOUTUBE_MAX_COMMENTS_PER_VIDEO=200
@@ -170,7 +164,7 @@ VITE_WS_URL=wss://api.eleicoes-2026.com/ws
 ```typescript
 interface SocialPost {
   id: string;
-  source: 'reddit' | 'threads' | 'twitter' | 'news' | 'youtube';
+  source: 'twitter' | 'news' | 'youtube';
   text: string;                    // max 1000 chars
   author: string;
   timestamp: string;               // ISO 8601
@@ -209,7 +203,7 @@ interface SocialPost {
 Stores a rolling window of raw comments for display in the live sampler panel.
 TTL keeps the table small — only the last 15 minutes of comments are retained.
 
-- **Partition key:** `source` (String) — e.g. `"youtube"`, `"reddit"`
+- **Partition key:** `source` (String) — e.g. `"youtube"`, `"twitter"`, `"news"`
 - **Sort key:** `timestamp#id` (String) — allows range queries by recency
 
 | Attribute | Type | Description |
@@ -313,56 +307,46 @@ s3://eleicoes2026-raw/
 
 ## Lambda: Collector
 
-**Trigger:** EventBridge rule — every 60 seconds (Reddit, NewsAPI)
+**Trigger:** EventBridge rule — every 60 seconds (RSS feeds)
 **Runtime:** Node.js 20.x  
 **Timeout:** 30s  
 **Memory:** 256 MB
 
-> **Apify sources (Threads + X/Twitter)** run on a **separate EventBridge rule every 5 minutes**
-> via a shared `apify-collector` Lambda. Both sources call the Apify REST API synchronously
-> and share the same seen-IDs DynamoDB table.
+> **Apify source (X/Twitter)** runs on a **separate EventBridge rule every 5 minutes**
+> via the `apify-collector` Lambda. It calls the Apify REST API synchronously and shares
+> the same seen-IDs DynamoDB table.
 
 
 ### Logic
 
-1. Read `KEYWORDS` and `SUBREDDITS` from env.
+1. Read `KEYWORDS` and `RSS_FEEDS` from env.
 2. Fetch from all enabled sources in parallel (`Promise.allSettled`).
 3. For each post, extract `candidate_mentions` by matching against the candidates list (case-insensitive).
 4. Filter out posts with no keyword or candidate match.
 5. Batch records into groups of 500 and call `kinesis:PutRecords`.
 6. Log counts per source to CloudWatch.
 
-### Reddit source
+### RSS news source (`sources/rss.ts`)
 
-- Endpoint: `https://www.reddit.com/r/{sub}/new.json?limit=100`
-- Headers: `User-Agent: BR-Election-Monitor/1.0`
-- Deduplicate by `id` using a DynamoDB seen-IDs table with 10-minute TTL.
-- Parse `title + selftext`, truncate to 1000 chars.
+Fetches Brazilian political news from a configurable list of RSS feeds every 60 seconds.
 
-### NewsAPI source
-
-- Endpoint: `https://newsapi.org/v2/everything`
-- Params: `q=Lula Bolsonaro eleições 2026&language=pt&sortBy=publishedAt&pageSize=50`
-- Parse `title + description`.
-
-### Threads source (via Apify)
-
-Uses the **Apify actor `futurizerush/threads-keyword-search`**. No Meta developer account required.
-Pricing: ~$0.003 per post — at 100 posts × 5 terms per run every 5 minutes, ~$13/month.
-
-**Strategy** (`apify-collector` Lambda, every 5 minutes):
-- POST to `https://api.apify.com/v2/acts/futurizerush~threads-keyword-search/run-sync-get-dataset-items`
-- Body: `{ queries: THREADS_SEARCH_TERMS, searchType: "RECENT", maxResults: THREADS_MAX_RESULTS_PER_TERM }`
-- Auth: `Authorization: Bearer <APIFY_API_TOKEN>`
-- Deduplicate post IDs via seen-IDs DynamoDB table (10-min TTL).
-- Map response fields: `id`, `text`, `username`, `url`, `timestamp` → `SocialPost`.
+- Feeds configured via `RSS_FEEDS` env var (comma-separated URLs).
+- Uses a custom `fetchFeed()` function that reads raw bytes, sniffs encoding from the XML prolog
+  (e.g. `<?xml encoding="ISO-8859-1"?>`), decodes with `TextDecoder`, then calls
+  `rss-parser.parseString()`. Required for feeds like Folha that declare ISO-8859-1 without
+  a `Content-Type` charset header.
+- All feeds fetched in parallel via `Promise.allSettled`; individual feed failures are logged and skipped.
+- Stable post ID: `news-${sha256(item.link ?? item.guid ?? title).slice(0, 20)}`.
+- Deduplicate via seen-IDs DynamoDB table (10-min TTL).
+- Parse `title + contentSnippet`, truncate to 1000 chars.
+- `author` falls back to the feed URL when `item.creator` is absent.
 
 ### X/Twitter source (via Apify)
 
 Uses the **Apify actor `xquik/x-tweet-scraper`** — $0.15 per 1,000 tweets, no X API key needed.
 At 100 tweets × 5 terms per run every 5 minutes, ~$6.50/month.
 
-**Strategy** (`apify-collector` Lambda, same 5-minute rule as Threads):
+**Strategy** (`apify-collector` Lambda, every 5 minutes):
 - POST to `https://api.apify.com/v2/acts/xquik~x-tweet-scraper/run-sync-get-dataset-items`
 - Body:
   ```json
@@ -841,7 +825,7 @@ Se o comentário for opinião pessoal sem alegações factuais, retorne score 0 
 
 ### Logic
 
-1. Skip if `source === 'news'` (NewsAPI articles are from verified outlets — do not score).
+1. Skip if `source === 'news'` (RSS news articles are from verified outlets — do not score).
 2. Skip if Comprehend confidence < `FAKE_INFO_CONFIDENCE_THRESHOLD`.
 3. Call `bedrock-runtime:InvokeModel` with the prompt above.
 4. Parse JSON response; strip any accidental markdown fences before `JSON.parse`.
@@ -974,7 +958,7 @@ matching the TTL of hourly items).
 Returns recent raw comments from the `comment-samples` table for display in the live sampler panel.
 
 Query params (all optional):
-- `source` — filter by platform (`youtube`, `threads`, `twitter`, `reddit`, `news`). Omit for all sources.
+- `source` — filter by platform (`youtube`, `twitter`, `news`). Omit for all sources.
 - `candidate` — filter by candidate mention.
 - `sentiment` — filter by `POSITIVE`, `NEGATIVE`, or `NEUTRAL`.
 - `limit` — number of items (default 20, max 50).
@@ -1057,7 +1041,7 @@ Returns aggregate fake-info stats for the dashboard misinformation panel.
   ],
   "by_source": [
     { "source": "youtube", "likely_false": 2100 },
-    { "source": "reddit", "likely_false": 1000 }
+    { "source": "twitter", "likely_false": 1000 }
   ]
 }
 ```
@@ -1154,7 +1138,7 @@ comments since they tend to be longer and more expressive than tweet-length post
 Title: "Amostra ao vivo de comentários" with a pulsing green dot when streaming.
 
 **Controls (top of panel):**
-- Source toggle pills: `Todos` · `YouTube` · `Threads` · `X/Twitter` · `Reddit` · `Notícias` — single-select, **default `Todos`** (was `YouTube`; BuzzFeed removed, CommentSampler is now the primary feed).
+- Source toggle pills: `Todos` · `YouTube` · `X/Twitter` · `Notícias` — single-select, **default `Todos`**.
 - Candidate filter pills: `Todos` · one per candidate — single-select, default `Todos`.
 - Sentiment filter: `Todos` · `Positivo` · `Negativo` · `Neutro` — single-select, default `Todos`.
 - Credibility filter: `Todos` · `Verificável` · `Suspeito` · `Falso provável` — single-select, default `Todos`.
@@ -1162,7 +1146,7 @@ Title: "Amostra ao vivo de comentários" with a pulsing green dot when streaming
 
 **Comment card** (rendered per sample):
 - Left accent bar colored by sentiment: green (positive), red (negative), gray (neutral).
-- Source platform icon (YouTube play icon, Reddit alien, Threads logo, X bird, newspaper) + platform name.
+- Source platform icon (YouTube play icon, X bird, newspaper) + platform name.
 - Candidate badge (colored per candidate, matches `CandidateCard` palette).
 - Comment text, max 3 lines with "ver mais" expand toggle if truncated.
 - Author name + timestamp (relative: "há 2 min").
@@ -1235,7 +1219,7 @@ Flag frequency bar chart (Recharts `BarChart`, horizontal):
 - Y-axis: Portuguese flag labels
 - X-axis: count
 - Bars colored red for top flag, amber for rest
-- Shows top 5 flags only
+- Shows all detected flags (up to 8); chart height scales dynamically with flag count
 
 Per-candidate breakdown table (below bar chart):
 - Columns: Candidate · Provável falso · Suspeito · Taxa falso%
@@ -1251,7 +1235,7 @@ of a public political data tool; important for journalists who may cite the dash
 
 Sections:
 1. **Sobre o projeto** — who built it, why, and what it is not (not affiliated with any campaign or party).
-2. **Fontes de dados** — list of sources (Reddit, NewsAPI, Threads via Apify, X/Twitter via Apify, YouTube), with data collection frequency and geographic/language filters.
+2. **Fontes de dados** — list of sources (RSS feeds from Brazilian news portals, X/Twitter via Apify, YouTube Data API), with data collection frequency and language filters.
 3. **Como o sentimento é calculado** — Comprehend for Portuguese, formula (`positive / total × 100`), 1-hour rolling window, confidence threshold (≥ 0.7), multi-candidate attribution note.
 4. **Desinformação** — what the Bedrock scorer does, the claim taxonomy table, what `SUSPICIOUS` vs `LIKELY_FALSE` mean, and the explicit caveat that a flag is not a verdict.
 5. **Limitações** — social media is not a poll; volume ≠ votes; bot activity not filtered; Comprehend sentiment is imperfect on slang and irony; regional data unavailable.
@@ -1298,14 +1282,17 @@ Sections:
   `encryption: StreamEncryption.KMS`. Auto-scales to handle election-day traffic spikes
   without scheduled shard management. Replaces the original 2-shard provisioned configuration.
 - **DynamoDB:** `election-sentiment` table, on-demand billing, TTL on `ttl` attribute (30h on hourly items), point-in-time recovery enabled
-- **Collector Lambda:** EventBridge rule every 60 seconds (Reddit, NewsAPI)
-- **Apify collector Lambda:** EventBridge rule every 5 minutes (Threads + X/Twitter via Apify REST API); `APIFY_API_TOKEN` in env
-- **YouTube collector Lambda:** separate EventBridge rule every 5 minutes; higher timeout (60s) for comment pagination
+- **Collector Lambda (`news` mode):** EventBridge rule every 60 seconds; reads RSS feeds from `RSS_FEEDS` env var
+- **Apify collector Lambda (`apify` mode):** EventBridge rule every 5 minutes (X/Twitter via Apify REST API); `APIFY_API_TOKEN` in env
+- **YouTube collector Lambda (`youtube` mode):** separate EventBridge rule every 5 minutes; higher timeout (60s) for comment pagination
 - **Processor Lambda:** Kinesis event source, batch size 100, `bisect-on-error: true`,
   max retries 3, **SQS DLQ** (`processor-dlq`) for poison records. Memory 1024 MB, timeout 120s.
 - **SQS Dead Letter Queue (`processor-dlq`):** receives records that failed after 3 retries.
   Alarm on queue depth > 0 → SNS email notification.
-- **Seen-IDs table:** DynamoDB, TTL 10 minutes (Reddit, Threads, X/Twitter, YouTube dedup)
+- **Broadcaster Lambda:** DynamoDB Streams on `election-sentiment` and `comment-samples`; both sources have `onFailure: SqsDlq(broadcaster-dlq), retryAttempts: 3`.
+- **SQS Dead Letter Queue (`broadcaster-dlq`):** prevents poison records from blocking Streams shards.
+- **Regional WAF (`RegionalWaf`):** attached to API Gateway stage. Rules: AWS Common Rule Set, Known Bad Inputs, rate limit 3000/5min per IP.
+- **Seen-IDs table:** DynamoDB, TTL 10 minutes (X/Twitter, YouTube, RSS dedup)
 - **Comment-samples table:** DynamoDB, on-demand, TTL 15 minutes, `source` PK + `timestamp#id` SK.
   **No GSI** (credibility-label-index moved to misinfo-events table).
 - **Misinfo-events table:** DynamoDB, on-demand, TTL 30 days, `candidate` PK + `timestamp#id` SK;
@@ -1326,6 +1313,7 @@ Sections:
 | Fake info spike | `FakeInfoDetected` > 15% of `TotalScored` in any 1-hour window | SNS email |
 | Score staleness | Any candidate `last_updated` > 10 min during 7am–11pm BRT | SNS email |
 | Processor DLQ depth | `processor-dlq` ApproximateNumberOfMessagesVisible > 0 | SNS email |
+| Broadcaster DLQ depth | `broadcaster-dlq` ApproximateNumberOfMessagesVisible > 0 | SNS email |
 
 ### `pipeline-stack.ts`
 
@@ -1344,7 +1332,8 @@ Sections:
 - **ACM certificate:** `us-east-1` region (required for CloudFront). Use
   `DnsValidatedCertificate` with the existing hosted zone to auto-create and validate the
   cert for `eleicoes-2026.com` and `*.eleicoes-2026.com` in one resource.
-- **CloudFront distribution:**
+- **CloudFront WAF (`CloudFrontWaf`):** CLOUDFRONT-scoped WebACL (must be in us-east-1). Rules: AWS Common Rule Set, Known Bad Inputs, rate limit 2000/5min per IP. Applied to both CloudFront distributions.
+- **CloudFront distribution (SPA, ID `EF046M9V59Q9C`):**
   - Aliases: `eleicoes-2026.com`, `www.eleicoes-2026.com`
   - Default behavior: S3 origin, HTTPS redirect, `CACHING_OPTIMIZED`
   - `/api/v1/scores` behavior: API Gateway origin (`api.eleicoes-2026.com`), **30-second TTL** (`Cache-Control: max-age=30`).
@@ -1438,7 +1427,6 @@ Payload pushed to clients (batched, every 2 seconds):
 | API Gateway (5M requests, reduced by CloudFront /v1/scores cache) | ~$10 |
 | SQS (processor-dlq, minimal traffic) | <$1 |
 | YouTube Data API v3 | $0 (free quota) |
-| Apify — Threads scraper (~100K posts/mo) | ~$13 |
 | Apify — X/Twitter scraper (~50K tweets/mo) | ~$8 |
 | Amazon Bedrock (Haiku, 100K comments) | ~$7 |
 | **Total** | **~$96** |
@@ -1479,7 +1467,7 @@ VITE_API_BASE=https://api.eleicoes-2026.com/v1 \
 VITE_WS_URL=wss://api.eleicoes-2026.com/ws \
 npm run build
 aws s3 sync dist/ s3://eleicoes-2026-site --delete
-aws cloudfront create-invalidation --distribution-id <dist-id> --paths "/*"
+aws cloudfront create-invalidation --distribution-id EF046M9V59Q9C --paths "/*"
 
 # 4. Deploy website stack (after frontend is in S3)
 # The existing Route53 hosted zone for eleicoes-2026.com is looked up automatically.
@@ -1534,9 +1522,8 @@ npx cdk diff
 |---|---|---|
 | Sentiment engine | Amazon Comprehend | Native `pt` support, no model training needed |
 | Language filter | Comprehend `DetectDominantLanguage` (PT confidence ≥ 0.7) | Filters English/Spanish/emoji-only posts before expensive sentiment + Bedrock calls |
-| Threads source | Apify actor (no Meta account needed) | Bypasses OAuth approval process; ~$13/month is cheaper than Meta developer account hassle |
 | X/Twitter source | Apify actor `xquik/x-tweet-scraper` | $0.15/1K tweets vs $42K/year official streaming; no API key needed |
-| Primary sources | Reddit + NewsAPI | Free tiers, high volume, good PT signal |
+| News source | RSS feeds (5 Brazilian portals) | Free, directly controlled feed list, no API key or quota; encoding handled via XML prolog sniffing |
 | Frontend | React + Vite + Recharts | Fast build, good charting ecosystem |
 | IaC | AWS CDK (TypeScript) | Consistent with Lambda/API code language |
 | Database | DynamoDB | Sub-millisecond reads for live dashboard |
@@ -1545,8 +1532,8 @@ npx cdk diff
 | Comment sampler | DynamoDB 15-min TTL table | Fast reads, self-cleaning, no extra infra |
 | Fake info scorer | Amazon Bedrock (Haiku) | Native PT understanding, fixed taxonomy prompt, cheap at low volume |
 | Scorer placement | Inside Processor Lambda | Avoids cold-start overhead of a separate Lambda per comment |
-| News source exemption | Skip scoring for NewsAPI | Verified outlets don't need LLM fact-checking; reduces cost and false positives |
-| Apify as scraping layer | Single token, multiple platforms | One `APIFY_API_TOKEN` covers Threads + X; no per-platform OAuth to manage |
+| News source exemption | Skip scoring for RSS news | Verified outlets don't need LLM fact-checking; reduces cost and false positives |
+| Apify as scraping layer | Single token for X/Twitter | One `APIFY_API_TOKEN`; no per-platform OAuth to manage |
 | Live score computation | Sum last 12 hourly windows at API response time | Avoids stale 24h rolling total; rolling 1h window reflects current public mood |
 | Misinfo long-term storage | Separate `misinfo-events` table (30-day TTL) | `comment-samples` 15-min TTL is gone before the hourly aggregator can query 24h periods |
 | Kinesis capacity | On-Demand mode | Auto-scales for election-day traffic spikes without scheduled shard management |
@@ -1556,7 +1543,7 @@ npx cdk diff
 | Username display | SHA-256 → first 4 hex chars anonymization in API Lambda | LGPD compliance without breaking deep-link URLs; raw usernames stored internally only |
 | Misinfo panel | Collapsible, collapsed by default | General-public audience: misinformation data is available but not alarmist by default |
 | Trending keywords | Hashtags only, keyword-counts DynamoDB table | High signal, user-normalized format; simpler than NLP-based keyword extraction |
-| Regional map | Out of scope (v1) | No reliable geolocation signal from Reddit, X, YouTube, or Threads APIs |
+| Regional map | Out of scope (v1) | No reliable geolocation signal from RSS, X, or YouTube sources |
 | Visual style | News dashboard (dark sidebar + white content) | Familiar to Brazilian news readers; information-dense layout suits a data tool |
 | Candidate palette | Official party colors | Immediately recognizable to Brazilian voters; no editorial ambiguity |
 | Post-election lifecycle | Continue through Dec 31 2026, then static freeze | Covers presidential transition period; static CloudFront freeze costs ~$3/month |
