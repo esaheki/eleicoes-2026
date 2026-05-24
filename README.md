@@ -143,10 +143,10 @@ See [PLAN.md](PLAN.md) for the full 10-phase build plan.
 | 1 — Workspace & Types | ✅ | npm workspaces, shared `SocialPost` types |
 | 2 — CDK Infrastructure | ✅ | All DynamoDB tables, Kinesis, Lambda placeholders |
 | 3 — Collector Lambda | ✅ | All 5 sources, dedup, Kinesis write, esbuild bundle |
-| 4 — Processor Lambda | pending | Comprehend sentiment → DynamoDB |
-| 5 — Fake Info Scorer | pending | Bedrock Claude Haiku misinfo scoring |
-| 6 — API Lambda | pending | 5 REST endpoints |
-| 7 — WebSocket Broadcaster | pending | DynamoDB Streams → live push |
-| 8 — React Frontend | pending | Vite + Tailwind + Recharts dashboard |
-| 9 — Website Infrastructure | pending | CloudFront, S3, ACM, Route 53 |
-| 10 — Pipeline + Monitoring | pending | Firehose archive, CloudWatch alarms |
+| 4 — Processor Lambda | ✅ | Comprehend sentiment → DynamoDB |
+| 5 — Fake Info Scorer | ✅ | Bedrock Claude Haiku misinfo scoring |
+| 6 — API Lambda | ✅ | 5 REST endpoints |
+| 7 — WebSocket Broadcaster | ✅ | DynamoDB Streams → live push |
+| 8 — React Frontend | ✅ | Vite + Tailwind + Recharts dashboard |
+| 9 — Website Infrastructure | ✅ | CloudFront, S3, ACM, Route 53 |
+| 10 — Pipeline + Monitoring | ✅ | Firehose archive, CloudWatch alarms |
