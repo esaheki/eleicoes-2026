@@ -107,7 +107,6 @@ export function Metodologia() {
             'Redes sociais não são pesquisas eleitorais — volume de menções não equivale a votos.',
             'Atividade de bots não é filtrada; picos anormais podem distorcer os dados.',
             'O Comprehend pode ter desempenho reduzido com gírias, ironia e sarcasmo.',
-            'Dados regionais (estado) disponíveis apenas quando a publicação indica localização.',
             'A cobertura de plataformas depende de APIs de terceiros com possíveis interrupções.',
           ].map(item => (
             <li key={item} className="flex items-start gap-2">
@@ -121,13 +120,13 @@ export function Metodologia() {
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-gray-800 mb-3">6. Privacidade (LGPD)</h2>
         <p className="text-sm text-gray-600 leading-relaxed">
-          Usernames são armazenados internamente para fins operacionais e retidos por 30 dias, após
-          os quais são excluídos. Na interface pública, todos os nomes de usuário são substituídos
-          por um identificador anônimo no formato{' '}
+          Nomes de usuário nunca são exibidos publicamente. Na interface pública, todos são
+          substituídos por um identificador anônimo no formato{' '}
           <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">usuário_XXXX</code>{' '}
-          (primeiros 4 caracteres do hash SHA-256 do nome original). Links para publicações
-          originais são mantidos para verificação de autoria. O painel não utiliza cookies de
-          rastreamento nem coleta dados dos visitantes.
+          (primeiros 4 caracteres do hash SHA-256 do nome original). Internamente, os dados
+          brutos são descartados automaticamente em até 15 minutos após a coleta. Links para
+          publicações originais são mantidos para verificação de autoria. O painel não utiliza
+          cookies de rastreamento nem coleta dados dos visitantes.
         </p>
       </section>
     </div>

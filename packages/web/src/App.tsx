@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
+import { MdDashboard, MdOutlineArticle } from 'react-icons/md';
 import { useScores } from './hooks/useScores';
 import { CandidateCard } from './components/CandidateCard';
 import { SentimentChart } from './components/SentimentChart';
@@ -11,7 +12,7 @@ import { CANDIDATE_COLORS } from './types';
 import type { Candidate } from './types';
 
 function navClass({ isActive }: { isActive: boolean }) {
-  return `block text-sm px-3 py-1.5 rounded transition-colors ${
+  return `flex items-center gap-2 text-sm px-3 py-1.5 rounded transition-colors ${
     isActive ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
   }`;
 }
@@ -64,7 +65,8 @@ export default function App() {
     <div className="flex min-h-screen bg-gray-50">
       {/* ── Sidebar ──────────────────────────────────────────────── */}
       <aside className="hidden md:flex md:w-60 flex-col bg-gray-900 text-white flex-shrink-0 min-h-screen">
-        <div className="px-4 py-5 border-b border-gray-800">
+        <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
+          <img src="/favicon.svg" alt="Logo" className="w-8 h-8 flex-shrink-0" />
           <h1 className="text-sm font-bold leading-snug">
             Eleições 2026
             <br />
@@ -73,8 +75,8 @@ export default function App() {
         </div>
 
         <nav className="px-3 py-3 border-b border-gray-800 space-y-0.5">
-          <NavLink to="/" end className={navClass}>Painel</NavLink>
-          <NavLink to="/metodologia" className={navClass}>Metodologia</NavLink>
+          <NavLink to="/" end className={navClass}><MdDashboard size={16} />Painel</NavLink>
+          <NavLink to="/metodologia" className={navClass}><MdOutlineArticle size={16} />Metodologia</NavLink>
         </nav>
 
         {/* Candidate legend with live scores */}

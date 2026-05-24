@@ -9,13 +9,22 @@ const SOURCES = ['Todos', 'YouTube', 'X/Twitter', 'Notícias'] as const;
 const SOURCE_MAP: Record<string, string> = {
   YouTube: 'youtube', 'X/Twitter': 'twitter', Notícias: 'news',
 };
+const SOURCE_COLORS: Record<string, string> = {
+  YouTube: '#FF0000', 'X/Twitter': '#000000', Notícias: '#6366f1',
+};
 const SENTIMENTS = ['Todos', 'Positivo', 'Negativo', 'Neutro'] as const;
 const SENTIMENT_MAP: Record<string, string> = {
   Positivo: 'POSITIVE', Negativo: 'NEGATIVE', Neutro: 'NEUTRAL',
 };
+const SENTIMENT_COLORS: Record<string, string> = {
+  Positivo: '#16a34a', Negativo: '#dc2626', Neutro: '#6b7280',
+};
 const CREDIBILITIES = ['Todos', 'Verificável', 'Suspeito', 'Falso provável'] as const;
 const CRED_MAP: Record<string, string> = {
   Verificável: 'CREDIBLE', Suspeito: 'SUSPICIOUS', 'Falso provável': 'LIKELY_FALSE',
+};
+const CRED_COLORS: Record<string, string> = {
+  Verificável: '#16a34a', Suspeito: '#d97706', 'Falso provável': '#dc2626',
 };
 const CANDIDATE_OPTIONS = ['Todos', ...CANDIDATES] as const;
 
@@ -39,22 +48,31 @@ interface PillGroupProps {
   value: string;
   onChange: (v: string) => void;
   renderLabel?: (opt: string, active: boolean) => React.ReactNode;
+  colorMap?: Record<string, string>;
 }
 
-function PillGroup({ options, value, onChange, renderLabel }: PillGroupProps) {
+function PillGroup({ options, value, onChange, renderLabel, colorMap }: PillGroupProps) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       {options.map(opt => {
         const active = value === opt;
+        const color = colorMap?.[opt];
         return (
           <button
             key={opt}
             onClick={() => onChange(opt)}
-            className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors ${
+            className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
               active
-                ? 'bg-gray-800 text-white border-gray-800'
-                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                ? 'text-white border-transparent'
+                : 'bg-white border-gray-200'
             }`}
+            style={
+              active
+                ? { backgroundColor: color ?? '#1f2937', borderColor: color ?? '#1f2937' }
+                : color
+                  ? { borderColor: `${color}55`, color: color }
+                  : undefined
+            }
           >
             {renderLabel ? renderLabel(opt, active) : opt}
           </button>
@@ -197,20 +215,26 @@ export function CommentSampler({ hashtagFilter }: Props) {
         </button>
       </div>
 
-      <div className="space-y-2 mb-4">
+      <div className="space-y-1 mb-3">
         <PillGroup
           options={SOURCES}
           value={source}
           onChange={setSource}
+          colorMap={SOURCE_COLORS}
           renderLabel={(opt, active) =>
             opt === 'Todos'
               ? opt
               : <SourceIcon source={SOURCE_MAP[opt] ?? opt} className={active ? '!text-white' : ''} />
           }
         />
-        <PillGroup options={CANDIDATE_OPTIONS} value={candidate} onChange={setCandidate} />
-        <PillGroup options={SENTIMENTS} value={sentiment} onChange={setSentiment} />
-        <PillGroup options={CREDIBILITIES} value={credibility} onChange={setCredibility} />
+        <PillGroup
+          options={CANDIDATE_OPTIONS}
+          value={candidate}
+          onChange={setCandidate}
+          colorMap={Object.fromEntries(CANDIDATES.map(c => [c, CANDIDATE_COLORS[c as Candidate]]))}
+        />
+        <PillGroup options={SENTIMENTS} value={sentiment} onChange={setSentiment} colorMap={SENTIMENT_COLORS} />
+        <PillGroup options={CREDIBILITIES} value={credibility} onChange={setCredibility} colorMap={CRED_COLORS} />
       </div>
 
       {loading && (
