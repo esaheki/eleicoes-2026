@@ -1,0 +1,17 @@
+{
+  "name": "eleicoes2026",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "infra"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
