@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { MdPause, MdPlayArrow } from 'react-icons/md';
 import { useCommentSampler } from '../hooks/useCommentSampler';
 import { FakeInfoBadge } from './FakeInfoBadge';
 import { SourceIcon } from './SourceIcon';
@@ -203,15 +204,15 @@ export function CommentSampler({ hashtagFilter }: Props) {
         </h3>
         <button
           onClick={() => (paused ? handleResume() : setPaused(true))}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+          className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-colors ${
             paused
               ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'
               : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-400'
           }`}
         >
           {paused
-            ? `▶ Retomar${bufferedCount > 0 ? ` · ${bufferedCount} novos` : ''}`
-            : '⏸ Pausar'}
+            ? <><MdPlayArrow size={14} />Retomar{bufferedCount > 0 ? ` · ${bufferedCount} novos` : ''}</>
+            : <><MdPause size={14} />Pausar</>}
         </button>
       </div>
 
