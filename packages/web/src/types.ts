@@ -22,6 +22,7 @@ export type CredibilityLabel = 'CREDIBLE' | 'SUSPICIOUS' | 'LIKELY_FALSE' | 'UNS
 export interface ScoreData {
   candidate: Candidate;
   score: number;
+  delta?: number;
   positive: number;
   negative: number;
   neutral: number;

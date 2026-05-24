@@ -17,12 +17,26 @@
   animation: slide-in 0.25s ease-out;
 }
 
+@keyframes score-flash {
+  0%   { opacity: 1; transform: scale(1); }
+  30%  { opacity: 0.6; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-score-flash {
+  animation: score-flash 0.45s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-in {
     animation: none;
   }
 
   .animate-pulse {
+    animation: none;
+  }
+
+  .animate-score-flash {
     animation: none;
   }
 }

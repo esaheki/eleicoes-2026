@@ -25,7 +25,7 @@ export function useScores() {
     setScores(prev =>
       prev.map(s =>
         s.candidate === msg.candidate
-          ? { ...s, score: msg.score, positive: msg.positive, negative: msg.negative, neutral: msg.neutral, total: msg.total }
+          ? { ...s, score: msg.score, delta: msg.delta, positive: msg.positive, negative: msg.negative, neutral: msg.neutral, total: msg.total }
           : s,
       ),
     );

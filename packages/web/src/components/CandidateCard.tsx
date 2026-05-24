@@ -1,12 +1,21 @@
-import { useState, useId } from 'react';
+import { useState, useId, useEffect, useRef } from 'react';
 import type { ScoreData, Candidate } from '../types';
 import { CANDIDATE_COLORS, CANDIDATE_PARTIES } from '../types';
 
-export function CandidateCard({ candidate, score, positive, negative, neutral, total }: ScoreData) {
+export function CandidateCard({ candidate, score, delta, positive, negative, neutral, total }: ScoreData) {
   const [showTip, setShowTip] = useState(false);
+  const [flashing, setFlashing] = useState(false);
   const tipId = useId();
   const color = CANDIDATE_COLORS[candidate as Candidate];
   const party = CANDIDATE_PARTIES[candidate as Candidate];
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    setFlashing(true);
+    const t = setTimeout(() => setFlashing(false), 500);
+    return () => clearTimeout(t);
+  }, [score]);
 
   const pctPos = total ? Math.round((positive / total) * 100) : 0;
   const pctNeg = total ? Math.round((negative / total) * 100) : 0;
@@ -14,10 +23,9 @@ export function CandidateCard({ candidate, score, positive, negative, neutral, t
 
   return (
     <div
-      className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden relative"
+      className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:scale-[1.01] transition-all duration-200 overflow-hidden relative"
       style={{ borderTop: `3px solid ${color}` }}
     >
-      {/* Faint candidate-color wash in top-right corner */}
       <div
         className="absolute top-0 right-0 w-24 h-24 rounded-bl-full opacity-[0.04] pointer-events-none"
         style={{ backgroundColor: color }}
@@ -35,11 +43,22 @@ export function CandidateCard({ candidate, score, positive, negative, neutral, t
         </div>
 
         <div className="text-right flex-shrink-0 ml-3">
-          <div className="text-4xl font-extrabold tabular-nums leading-none" style={{ color }}>
+          <div
+            className={`text-4xl font-extrabold tabular-nums leading-none ${flashing ? 'animate-score-flash' : ''}`}
+            style={{ color }}
+          >
             {score}
             <span className="text-base font-normal text-gray-400">%</span>
           </div>
-          <div className="flex items-center gap-1 justify-end mt-1">
+          <div className="flex items-center gap-1.5 justify-end mt-1">
+            {delta !== undefined && delta !== 0 && (
+              <span
+                className="text-xs font-semibold tabular-nums"
+                style={{ color: delta > 0 ? '#16a34a' : '#dc2626' }}
+              >
+                {delta > 0 ? `+${delta}` : delta} {delta > 0 ? '▲' : '▼'}
+              </span>
+            )}
             <span className="text-xs text-gray-400">positivo</span>
             <div className="relative">
               <button
