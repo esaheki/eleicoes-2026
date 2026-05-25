@@ -143,7 +143,7 @@ export class StreamingStack extends cdk.Stack {
     // ── Collector Lambda — Reddit + NewsAPI (every 60s) ───────────────────
     const collectorLambda = new NodejsFunction(this, 'Collector', {
       functionName: 'eleicoes2026-collector',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: collectorEntry,
       handler: 'handler',
       timeout: cdk.Duration.seconds(30),
@@ -158,7 +158,7 @@ export class StreamingStack extends cdk.Stack {
     // ── Apify Collector Lambda — Threads + X/Twitter (every 5 min) ────────
     const apifyCollectorLambda = new NodejsFunction(this, 'ApifyCollector', {
       functionName: 'eleicoes2026-apify-collector',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: collectorEntry,
       handler: 'handler',
       timeout: cdk.Duration.seconds(300),
@@ -177,7 +177,7 @@ export class StreamingStack extends cdk.Stack {
     // ── YouTube Collector Lambda (every 5 min, 60s timeout for pagination) ─
     const youtubeCollectorLambda = new NodejsFunction(this, 'YouTubeCollector', {
       functionName: 'eleicoes2026-youtube-collector',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: collectorEntry,
       handler: 'handler',
       timeout: cdk.Duration.seconds(60),
@@ -200,7 +200,7 @@ export class StreamingStack extends cdk.Stack {
     // ── Processor Lambda — Kinesis → Comprehend → DynamoDB (1024 MB, 120s) ─
     const processorLambda = new NodejsFunction(this, 'Processor', {
       functionName: 'eleicoes2026-processor',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../packages/processor/src/index.ts'),
       handler: 'handler',
       timeout: cdk.Duration.seconds(120),
@@ -220,7 +220,7 @@ export class StreamingStack extends cdk.Stack {
     // ── Misinfo Aggregator Lambda (every 60 min) ──────────────────────────
     const misinfoAggregatorLambda = new NodejsFunction(this, 'MisinfoAggregator', {
       functionName: 'eleicoes2026-misinfo-aggregator',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../packages/processor/src/aggregator.ts'),
       handler: 'handler',
       timeout: cdk.Duration.seconds(30),
@@ -234,7 +234,7 @@ export class StreamingStack extends cdk.Stack {
     // ── WebSocket API Gateway (Phase 7) ──────────────────────────────────
     const wsConnectLambda = new NodejsFunction(this, 'WsConnect', {
       functionName: 'eleicoes2026-ws-connect',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../packages/broadcaster/src/connect.ts'),
       handler: 'handler',
       timeout: cdk.Duration.seconds(10),
@@ -267,7 +267,7 @@ export class StreamingStack extends cdk.Stack {
     // ── WebSocket Broadcaster Lambda (DynamoDB Streams trigger, Phase 7) ──
     const broadcasterLambda = new NodejsFunction(this, 'WebSocketBroadcaster', {
       functionName: 'eleicoes2026-ws-broadcaster',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../packages/broadcaster/src/index.ts'),
       handler: 'handler',
       timeout: cdk.Duration.seconds(30),
@@ -395,7 +395,7 @@ export class StreamingStack extends cdk.Stack {
     // ── API Lambda + REST API Gateway (Phase 6) ───────────────────────────
     const apiLambda = new NodejsFunction(this, 'Api', {
       functionName: 'eleicoes2026-api',
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       entry: path.join(__dirname, '../../packages/api/src/index.ts'),
       handler: 'handler',
       timeout: cdk.Duration.seconds(10),
