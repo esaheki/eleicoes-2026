@@ -1,18 +1,40 @@
-name: CD — Backend
+name: CI/CD
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'infra/**'
-      - 'packages/collector/**'
-      - 'packages/processor/**'
-      - 'packages/api/**'
-      - 'packages/broadcaster/**'
-      - 'package-lock.json'
+  pull_request:
+    branches: [main]
 
 jobs:
-  deploy-backend:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      - name: CDK Synth
+        run: npx cdk synth --all
+        working-directory: infra
+        env:
+          CDK_DEFAULT_ACCOUNT: '055921998432'
+          CDK_DEFAULT_REGION: us-east-1
+
+  deploy:
+    name: Deploy
+    needs: ci
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
