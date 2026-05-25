@@ -1,0 +1,55 @@
+name: CD — Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'packages/collector/**'
+      - 'packages/processor/**'
+      - 'packages/api/**'
+      - 'packages/broadcaster/**'
+      - 'package-lock.json'
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy backend stacks
+        run: npx cdk deploy StreamingStack PipelineStack --require-approval never
+        working-directory: infra
+
+      - name: Build web
+        run: npm run build
+        working-directory: packages/web
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+
+      - name: Sync to S3
+        run: aws s3 sync dist/ s3://eleicoes-2026-site --delete
+        working-directory: packages/web
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id EF046M9V59Q9C --paths "/*"
+
+      - name: Deploy website stack
+        run: npx cdk deploy WebsiteStack --require-approval never
+        working-directory: infra
