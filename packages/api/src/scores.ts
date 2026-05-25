@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { CANDIDATES } from '../../collector/src/types';
 
+
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 function isoHour(date: Date = new Date()): string {
