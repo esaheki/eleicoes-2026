@@ -65,7 +65,7 @@ Social APIs ──► Collector Lambda ──► Kinesis (On-Demand) ──► P
                                               WAF (CloudFront + Regional) ──► React Frontend (CloudFront/S3)
 ```
 
-All Lambda runtimes are **Node.js 20.x** (dev machine uses Node 24 via nvm). Lambda code is bundled by CDK's `NodejsFunction` construct using **esbuild** — no `tsc` compile step needed for deployment.
+All Lambda runtimes are **Node.js 24.x** (dev machine uses Node 24 via nvm). Lambda code is bundled by CDK's `NodejsFunction` construct using **esbuild** — no `tsc` compile step needed for deployment.
 
 ## Package structure
 

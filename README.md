@@ -22,7 +22,7 @@ Social APIs ──► Collector Lambda ──► Kinesis ──► Processor Lam
 | Service | Purpose |
 |---|---|
 | Amazon Kinesis (On-Demand) | Real-time post stream |
-| AWS Lambda (Node 20.x) | Collector, Processor, API, Broadcaster |
+| AWS Lambda (Node 24.x) | Collector, Processor, API, Broadcaster |
 | Amazon DynamoDB (On-Demand) | Sentiment windows, comment samples, misinfo events |
 | AWS Comprehend | Portuguese language detection + sentiment |
 | Amazon Bedrock (Claude Haiku) | Misinformation scoring |
@@ -69,7 +69,7 @@ eleicoes-2026/
 
 ## Getting Started
 
-**Prerequisites:** Node 20+, AWS CLI configured, nvm recommended.
+**Prerequisites:** Node 24+, AWS CLI configured, nvm recommended.
 
 ```bash
 # Install dependencies

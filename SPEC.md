@@ -308,7 +308,7 @@ s3://eleicoes2026-raw/
 ## Lambda: Collector
 
 **Trigger:** EventBridge rule — every 60 seconds (RSS feeds)
-**Runtime:** Node.js 20.x  
+**Runtime:** Node.js 24.x  
 **Timeout:** 30s  
 **Memory:** 256 MB
 
@@ -387,7 +387,7 @@ export async function runApifyActor<T>(
 
 **File:** `packages/collector/src/sources/youtube.ts`  
 **Trigger:** Separate EventBridge rule — every 5 minutes (`youtube-collector` Lambda)  
-**Runtime:** Node.js 20.x | **Timeout:** 60s | **Memory:** 256 MB  
+**Runtime:** Node.js 24.x | **Timeout:** 60s | **Memory:** 256 MB  
 **API:** YouTube Data API v3 (Google Cloud project, free, 10,000 units/day quota)
 
 ---
@@ -745,7 +745,7 @@ if (disabledUntil && new Date() < new Date(disabledUntil)) {
 ```typescript
 // YouTube collector Lambda
 const youtubeCollector = new lambda.Function(this, 'YouTubeCollector', {
-  runtime: lambda.Runtime.NODEJS_20_X,
+  runtime: lambda.Runtime.NODEJS_24_X,
   handler: 'index.handler',
   code: lambda.Code.fromAsset('../packages/collector'),
   timeout: cdk.Duration.seconds(60),
@@ -856,7 +856,7 @@ At 100,000 scored comments/month: ~$7/month additional cost.
 ## Lambda: Processor
 
 **Trigger:** Kinesis Data Streams (`election-stream`), batch size 100, starting position LATEST  
-**Runtime:** Node.js 20.x  
+**Runtime:** Node.js 24.x  
 **Timeout:** 120s  
 **Memory:** 1024 MB
 
@@ -911,7 +911,7 @@ blocks — bad records are isolated and the batch continues.
 ## Lambda: API
 
 **Trigger:** API Gateway REST  
-**Runtime:** Node.js 20.x  
+**Runtime:** Node.js 24.x  
 **Timeout:** 10s  
 **Memory:** 128 MB
 
@@ -1062,7 +1062,7 @@ Allow `CORS_ORIGIN` env var. In development allow `http://localhost:5173`.
 ## Lambda: Misinformation Aggregator
 
 **Trigger:** EventBridge rule — every 60 minutes  
-**Runtime:** Node.js 20.x  
+**Runtime:** Node.js 24.x  
 **Timeout:** 30s  
 **Memory:** 256 MB
 
@@ -1481,7 +1481,7 @@ npx cdk deploy WebsiteStack
 ## Development Setup
 
 ```bash
-# Prerequisites: Node 20+, AWS CLI configured, CDK CLI installed
+# Prerequisites: Node 24+, AWS CLI configured, CDK CLI installed
 
 git clone <repo>
 cd eleicoes2026
