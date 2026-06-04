@@ -326,17 +326,6 @@ export class StreamingStack extends cdk.Stack {
       retryAttempts: 3,
     }));
 
-    // ── Comprehend IAM for Processor ──────────────────────────────────────
-    processorLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'comprehend:DetectDominantLanguage',
-        'comprehend:BatchDetectDominantLanguage',
-        'comprehend:DetectSentiment',
-        'comprehend:BatchDetectSentiment',
-      ],
-      resources: ['*'],
-    }));
-
     // ── Bedrock IAM for Processor ─────────────────────────────────────────
     // Inference profiles require both the profile ARN and the underlying foundation model ARN
     processorLambda.addToRolePolicy(new iam.PolicyStatement({

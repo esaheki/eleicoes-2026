@@ -110,14 +110,14 @@ async function callBedrock(post: SocialPost): Promise<FakeCheckResult> {
 
 export async function scorePost(
   post: SocialPost,
-  comprehendConfidence: number,
+  sentimentConfidence: number,
 ): Promise<FakeCheckResult> {
   // NewsAPI articles come from verified outlets — skip scoring
   if (post.source === 'news') return UNSCORED;
 
-  // Skip low-confidence Comprehend results (emoji-only, mixed language, etc.)
+  // Skip low-confidence sentiment results (emoji-only, mixed language, etc.)
   const threshold = parseFloat(process.env.FAKE_INFO_CONFIDENCE_THRESHOLD ?? '0.6');
-  if (comprehendConfidence < threshold) return UNSCORED;
+  if (sentimentConfidence < threshold) return UNSCORED;
 
   try {
     return await limit(() => callBedrock(post));

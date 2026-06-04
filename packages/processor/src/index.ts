@@ -1,6 +1,6 @@
 import type { KinesisStreamEvent } from 'aws-lambda';
 import type { SocialPost } from '../../collector/src/types';
-import { filterByLanguage, detectSentimentBatch } from './sentiment';
+import { detectLanguageAndSentiment } from './sentiment';
 import { scorePost } from './fakechecker';
 import {
   writeHourlyWindow,
@@ -31,15 +31,11 @@ export const handler = async (event: KinesisStreamEvent): Promise<void> => {
 
   if (!posts.length) return;
 
-  // Step 0: Language filter — keep only Portuguese posts (confidence >= 0.7)
-  const ptFlags = await filterByLanguage(posts.map(p => p.text));
-  const ptPosts = posts.filter((_, i) => ptFlags[i]);
+  // Step 0: Language filter + sentiment detection in one Bedrock batch call
+  const langAndSentiment = await detectLanguageAndSentiment(posts.map(p => p.text));
+  const ptPosts = posts.filter((_, i) => langAndSentiment[i].isPortuguese);
+  const sentiments = langAndSentiment.filter(r => r.isPortuguese).map(r => r.result);
   console.log(`Language filter: ${ptPosts.length}/${posts.length} Portuguese posts`);
-
-  if (!ptPosts.length) return;
-
-  // Step 2: Batch sentiment detection (25 per Comprehend call)
-  const sentiments = await detectSentimentBatch(ptPosts.map(p => p.text));
 
   // Steps 3, 7, 8, 9, 10: Process each post in parallel
   const results = await Promise.allSettled(
@@ -64,7 +60,7 @@ export const handler = async (event: KinesisStreamEvent): Promise<void> => {
       const primaryCandidate = post.candidate_mentions[0];
       if (!primaryCandidate) return;
 
-      // Step 8: Comment sample (only if Comprehend confidence >= 0.7)
+      // Step 8: Comment sample (only if sentiment confidence >= 0.7)
       if (sentiment.confidence >= 0.7) {
         await writeCommentSample(post, primaryCandidate, sentiment, credibility);
       }
