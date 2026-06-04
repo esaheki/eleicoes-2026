@@ -47,7 +47,7 @@ export async function detectLanguageAndSentiment(
         accept: 'application/json',
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 512,
+          max_tokens: 1536,
           messages: [{ role: 'user', content: buildPrompt(batch) }],
         }),
       }));
