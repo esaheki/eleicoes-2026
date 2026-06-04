@@ -55,8 +55,8 @@ cd ../../infra && npx cdk deploy WebsiteStack
 
 ```
 Social APIs ──► Collector Lambda ──► Kinesis (On-Demand) ──► Processor Lambda ──► DynamoDB
-(RSS feeds,                                                   (Comprehend pt +
- X via Apify,                                                 Bedrock Haiku fakechecker)
+(RSS feeds,                                                   (Bedrock Haiku:
+ X via Apify,                                                 sentiment + fakechecker)
  YouTube Data API v3)                                                 │
                                                          Broadcaster Lambda (DDB Streams)
                                                                       │
@@ -72,7 +72,7 @@ All Lambda runtimes are **Node.js 24.x** (dev machine uses Node 24 via nvm). Lam
 | Package | Purpose |
 |---|---|
 | `packages/collector` | Lambda polling RSS feeds/X/YouTube → Kinesis. `COLLECTOR_MODE` env var routes to the right source (`news`, `apify`, `youtube`). Shared dedup via `seen-ids` DynamoDB table (10-min TTL). |
-| `packages/processor` | Kinesis-triggered Lambda. Language filter (`DetectDominantLanguage`, PT≥0.7), sentiment (`DetectSentiment`), Bedrock fakechecker (concurrency-5 via `p-limit`), then writes to 4 DynamoDB tables. |
+| `packages/processor` | Kinesis-triggered Lambda. Single Bedrock Haiku batch call per 25 posts does Portuguese language detection (PT threshold 0.7) + sentiment scoring, then Bedrock fakechecker (concurrency-5 via `p-limit`), then writes to 4 DynamoDB tables. |
 | `packages/api` | API Gateway REST Lambda. 5 endpoints: `/v1/scores`, `/v1/history`, `/v1/samples`, `/v1/trending`, `/v1/misinformation`. LGPD anonymization via SHA-256 on `author` field. |
 | `packages/broadcaster` | DynamoDB Streams-triggered Lambda. Pushes `score_update` and batched `new_sample_batch` events to all WebSocket connections. SQS DLQ on both Streams sources. |
 | `packages/web` | React 18 + Vite + Tailwind + Recharts dashboard. Portuguese-only, mobile-first. |
@@ -137,7 +137,7 @@ YOUTUBE_API_KEY=
 - Collector (`news` mode): `KINESIS_STREAM_NAME`, `RSS_FEEDS`, `KEYWORDS`
 - Collector (`apify` mode): `KINESIS_STREAM_NAME`, `APIFY_API_TOKEN`, `X_*`, `KEYWORDS`
 - Collector (`youtube` mode): `KINESIS_STREAM_NAME`, `YOUTUBE_API_KEY`, `YOUTUBE_*`, `KEYWORDS`
-- Processor: `DYNAMO_TABLE`, `COMPREHEND_LANGUAGE`, `BEDROCK_MODEL_ID`, `FAKE_INFO_CONFIDENCE_THRESHOLD`, `FAKE_INFO_SCORE_HIGH`, `FAKE_INFO_SCORE_MEDIUM`
+- Processor: `DYNAMO_TABLE`, `BEDROCK_MODEL_ID`, `FAKE_INFO_CONFIDENCE_THRESHOLD`, `FAKE_INFO_SCORE_HIGH`, `FAKE_INFO_SCORE_MEDIUM`
 - API: `DYNAMO_TABLE`, `CORS_ORIGIN`
 
 ### Web (build-time)

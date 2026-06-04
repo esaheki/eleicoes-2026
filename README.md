@@ -1,6 +1,6 @@
 # Eleições 2026 — Real-Time Sentiment Dashboard
 
-A public web dashboard that streams social media and news data about the 2026 Brazilian presidential election, runs Portuguese-language sentiment analysis via AWS Comprehend, and displays live candidate sentiment scores on a React frontend.
+A public web dashboard that streams social media and news data about the 2026 Brazilian presidential election, runs Portuguese-language sentiment analysis via Amazon Bedrock (Claude Haiku), and displays live candidate sentiment scores on a React frontend.
 
 **First round:** October 4, 2026 · **Runoff:** October 25, 2026  
 **Candidates:** Lula (PT), Flávio Bolsonaro (PL), Romeu Zema (NOVO), Ronaldo Caiado (PSD)
@@ -11,8 +11,8 @@ A public web dashboard that streams social media and news data about the 2026 Br
 
 ```
 Social APIs ──► Collector Lambda ──► Kinesis ──► Processor Lambda ──► DynamoDB
-                (RSS feeds,                       (Comprehend pt +
-                 X via Apify,                      Bedrock Haiku fakechecker)
+                (RSS feeds,                       (Bedrock Haiku:
+                 X via Apify,                      sentiment + fakechecker)
                  YouTube Data API v3)                     │
                                              API Lambda + WS Broadcaster
                                                           │
@@ -24,8 +24,7 @@ Social APIs ──► Collector Lambda ──► Kinesis ──► Processor Lam
 | Amazon Kinesis (On-Demand) | Real-time post stream |
 | AWS Lambda (Node 24.x) | Collector, Processor, API, Broadcaster |
 | Amazon DynamoDB (On-Demand) | Sentiment windows, comment samples, misinfo events |
-| AWS Comprehend | Portuguese language detection + sentiment |
-| Amazon Bedrock (Claude Haiku) | Misinformation scoring |
+| Amazon Bedrock (Claude Haiku) | Portuguese language detection, sentiment analysis, misinformation scoring |
 | AWS WAFv2 | Rate limiting + managed rules on CloudFront and API Gateway |
 | API Gateway (REST + WebSocket) | REST endpoints + live push |
 | CloudFront + S3 | Static frontend hosting |
@@ -55,7 +54,7 @@ eleicoes-2026/
 │   │           ├── apify.ts     # Shared Apify REST client
 │   │           ├── xtwitter.ts
 │   │           └── youtube.ts   # 4-phase: search → enrich → comments → map
-│   ├── processor/            # Processor Lambda — Kinesis → Comprehend → DynamoDB
+│   ├── processor/            # Processor Lambda — Kinesis → Bedrock → DynamoDB
 │   ├── api/                  # API Lambda — 5 REST endpoints
 │   └── web/                  # React dashboard (Vite + Tailwind + Recharts)
 ├── docs/
@@ -151,7 +150,7 @@ All phases complete and deployed.
 | 1 — Workspace & Types | ✅ | npm workspaces, shared `SocialPost` types |
 | 2 — CDK Infrastructure | ✅ | All DynamoDB tables, Kinesis, Lambda placeholders |
 | 3 — Collector Lambda | ✅ | RSS/X/YouTube sources, dedup, Kinesis write |
-| 4 — Processor Lambda | ✅ | Comprehend sentiment → DynamoDB |
+| 4 — Processor Lambda | ✅ | Bedrock Haiku sentiment + language detection → DynamoDB |
 | 5 — Fake Info Scorer | ✅ | Bedrock Claude Haiku misinfo scoring |
 | 6 — API Lambda | ✅ | 5 REST endpoints |
 | 7 — WebSocket Broadcaster | ✅ | DynamoDB Streams → live push, SQS DLQ |
