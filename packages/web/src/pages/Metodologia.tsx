@@ -29,15 +29,15 @@ export function Metodologia() {
           </li>
         </ul>
         <p className="text-sm text-gray-600 mt-3">
-          Apenas conteúdo em português é processado (confiança ≥ 70% via Amazon Comprehend).
+          Apenas conteúdo em português é processado (confiança ≥ 70% via Amazon Bedrock).
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-gray-800 mb-3">3. Como o sentimento é calculado</h2>
         <p className="text-sm text-gray-600 leading-relaxed mb-3">
-          O sentimento é detectado pelo Amazon Comprehend, serviço de processamento de linguagem
-          natural da AWS treinado em português. Cada publicação é classificada como{' '}
+          O sentimento é detectado pelo Amazon Bedrock (modelo Claude Haiku), que classifica o idioma
+          e o sentimento de cada publicação em lotes. Cada publicação é classificada como{' '}
           <em>positiva</em>, <em>negativa</em> ou <em>neutra</em> em relação ao candidato mencionado.
         </p>
         <p className="text-sm text-gray-600 leading-relaxed">
@@ -106,7 +106,7 @@ export function Metodologia() {
           {[
             'Redes sociais não são pesquisas eleitorais — volume de menções não equivale a votos.',
             'Atividade de bots não é filtrada; picos anormais podem distorcer os dados.',
-            'O Comprehend pode ter desempenho reduzido com gírias, ironia e sarcasmo.',
+            'O modelo pode interpretar erroneamente gírias muito específicas ou contexto cultural local.',
             'A cobertura de plataformas depende de APIs de terceiros com possíveis interrupções.',
           ].map(item => (
             <li key={item} className="flex items-start gap-2">
