@@ -19,12 +19,13 @@ interface BatchItem {
 
 function buildPrompt(texts: string[]): string {
   const numbered = texts.map((t, i) => `${i + 1}. ${t.slice(0, 300)}`).join('\n');
-  return `For each text below, classify language and sentiment. Return ONLY a JSON array (no explanation) with one object per text in the same order:
-{"is_portuguese":boolean,"sentiment":"POSITIVE"|"NEGATIVE"|"NEUTRAL"|"MIXED"|null,"scores":{"positive":float,"negative":float,"neutral":float,"mixed":float}|null}
+  return `For each text below, classify language and sentiment. Return ONLY a compact JSON array (no whitespace, no explanation) with one object per text in the same order:
+[{"is_portuguese":bool,"sentiment":"POSITIVE"|"NEGATIVE"|"NEUTRAL"|"MIXED"|null,"scores":{"positive":float,"negative":float,"neutral":float,"mixed":float}|null},...]
 
-Set "is_portuguese" to true only if the text is primarily written in Portuguese.
-Set "sentiment" and "scores" to null if not Portuguese.
-Scores must sum to approximately 1.0.
+Rules:
+- "is_portuguese": true only if the text is primarily written in Portuguese
+- "sentiment" and "scores": null if not Portuguese
+- scores must sum to approximately 1.0
 
 Texts:
 ${numbered}`;
@@ -47,7 +48,7 @@ export async function detectLanguageAndSentiment(
         accept: 'application/json',
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 1536,
+          max_tokens: 4096,
           messages: [{ role: 'user', content: buildPrompt(batch) }],
         }),
       }));
