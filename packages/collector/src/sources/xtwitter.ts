@@ -23,6 +23,7 @@ export async function collectXTwitter(): Promise<SocialPost[]> {
     items = await runApifyActor<XTweetItem>(actorId, {
       searchTerms: searchTerms.map(t => `${t} lang:${langFilter}`),
       maxTweets,
+      maxItems: maxTweets,
       sort: 'Latest',
     });
   } catch (err) {
