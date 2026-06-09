@@ -16,8 +16,8 @@ process.env.X_LANG_FILTER ??= 'pt';
 process.env.X_MAX_TWEETS_PER_TERM ??= '30';
 process.env.X_APIFY_ACTOR ??= 'xquik~x-tweet-scraper';
 process.env.YOUTUBE_SEARCH_TERMS ??= 'Lula 2026,Flávio Bolsonaro 2026,eleições presidenciais 2026';
-process.env.YOUTUBE_MAX_VIDEOS_PER_RUN ??= '5';
-process.env.YOUTUBE_MAX_COMMENTS_PER_VIDEO ??= '50';
+process.env.YOUTUBE_MAX_VIDEOS_PER_RUN ??= '15';
+process.env.YOUTUBE_MAX_COMMENTS_PER_VIDEO ??= '15';
 
 import { handler } from './index';
 

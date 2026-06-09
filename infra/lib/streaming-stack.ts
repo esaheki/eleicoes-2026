@@ -169,7 +169,7 @@ export class StreamingStack extends cdk.Stack {
         APIFY_API_TOKEN_SSM: '/eleicoes2026/apify-api-token',
         X_SEARCH_TERMS: 'Lula 2026,Flávio Bolsonaro,eleições2026,Zema presidente,Caiado presidente',
         X_LANG_FILTER: 'pt',
-        X_MAX_TWEETS_PER_TERM: '100',
+        X_MAX_TWEETS_PER_TERM: '30',
         X_APIFY_ACTOR: 'xquik~x-tweet-scraper',
       },
     });
@@ -187,8 +187,8 @@ export class StreamingStack extends cdk.Stack {
         COLLECTOR_MODE: 'youtube',
         YOUTUBE_API_KEY_SSM: '/eleicoes2026/youtube-api-key',
         YOUTUBE_SEARCH_TERMS: 'Lula 2026,Flávio Bolsonaro 2026,eleições presidenciais 2026',
-        YOUTUBE_MAX_VIDEOS_PER_RUN: '10',
-        YOUTUBE_MAX_COMMENTS_PER_VIDEO: '50',
+        YOUTUBE_MAX_VIDEOS_PER_RUN: '15',
+        YOUTUBE_MAX_COMMENTS_PER_VIDEO: '15',
       },
     });
 
