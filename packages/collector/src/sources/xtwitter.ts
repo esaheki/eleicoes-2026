@@ -13,7 +13,7 @@ interface XTweetItem {
 
 export async function collectXTwitter(): Promise<SocialPost[]> {
   const searchTerms = process.env.X_SEARCH_TERMS!.split(',');
-  const maxTweets = Number(process.env.X_MAX_TWEETS_PER_TERM ?? '100');
+  const maxTweets = Number(process.env.X_MAX_TWEETS_PER_TERM ?? '30');
   const actorId = process.env.X_APIFY_ACTOR ?? 'xquik~x-tweet-scraper';
   const langFilter = process.env.X_LANG_FILTER ?? 'pt';
   const keywords = process.env.KEYWORDS!.split(',').map(k => k.toLowerCase());
