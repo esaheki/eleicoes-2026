@@ -5,6 +5,8 @@ A fully-serverless, event-driven pipeline that ingests social media and news con
 **Live:** [eleicoes-2026.com](https://eleicoes-2026.com) · **API:** [api.eleicoes-2026.com/v1](https://api.eleicoes-2026.com/v1)  
 **Election dates:** Round 1 October 4, 2026 · Runoff October 25, 2026
 
+![Dashboard screenshot](docs/screenshot.png)
+
 ---
 
 ## What makes this interesting
